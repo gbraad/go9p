@@ -1,39 +1,17 @@
-// Copyright 2009 The Go Authors. All rights reserved.
+// Copyright 2009 The go9p Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// http://golang.org/src/os/stat_windows.go
-
-package ufs
+package go9p
 
 import (
+	"fmt"
 	"os"
+	"path"
 	"strings"
 	"syscall"
 	"time"
-
-	"k8s.io/minikube/third_party/go9p/p"
-	"k8s.io/minikube/third_party/go9p/p/srv"
 )
-
-// type Win32FileAttributeData struct {
-//     FileAttributes uint32
-//     CreationTime   Filetime
-//     LastAccessTime Filetime
-//     LastWriteTime  Filetime
-//     FileSizeHigh   uint32
-//     FileSizeLow    uint32
-// }
-
-// A FileInfo describes a file and is returned by Stat and Lstat.
-// type FileInfo interface {
-// 	Name() string       // base name of the file
-// 	Size() int64        // length in bytes for regular files; system-dependent for others
-// 	Mode() FileMode     // file mode bits
-// 	ModTime() time.Time // modification time
-// 	IsDir() bool        // abbreviation for Mode().IsDir()
-// 	Sys() interface{}   // underlying data source (can return nil)
-// }
 
 func atime(fi os.FileInfo) time.Time {
 	return time.Unix(0, fi.Sys().(*syscall.Win32FileAttributeData).LastAccessTime.Nanoseconds())
@@ -41,23 +19,21 @@ func atime(fi os.FileInfo) time.Time {
 
 // IsBlock reports if the file is a block device
 func isBlock(d os.FileInfo) bool {
-	// return time.Unix(0, fi.Sys().(*syscall.Win32FileAttributeData).LastAccessTime.Nanoseconds())
-	// stat := d.Sys().(os.FileInfo)
+	// stat := d.Sys().(*syscall.Stat_t)
 	// return (stat.Mode & syscall.S_IFMT) == syscall.S_IFBLK
 	return true
 }
 
 // IsChar reports if the file is a character device
 func isChar(d os.FileInfo) bool {
-	// stat := d.Sys().(os.FileInfo)
+	// stat := d.Sys().(*syscall.Stat_t)
 	// return (stat.Mode & syscall.S_IFMT) == syscall.S_IFCHR
 	return true
 }
 
-func dir2Qid(d os.FileInfo) *p.Qid {
-	var qid p.Qid
+func dir2Qid(d os.FileInfo) *Qid {
+	var qid Qid
 
-	// d.Sys().(*syscall.Win32FileAttributeData)
 	qid.Path = uint64(d.Sys().(*syscall.Win32FileAttributeData).FileSizeLow)
 	qid.Version = uint32(d.ModTime().UnixNano() / 1000000)
 	qid.Type = dir2QidType(d)
@@ -65,20 +41,28 @@ func dir2Qid(d os.FileInfo) *p.Qid {
 	return &qid
 }
 
-func dir2Dir(path string, d os.FileInfo, dotu bool, upool p.Users) *p.Dir {
-	// sysMode := d.Sys().(os.FileInfo)
+func dir2Dir(path string, d os.FileInfo, dotu bool, upool Users) (*Dir, error) {
+	if r := recover(); r != nil {
+		fmt.Print("stat failed: ", r)
+		return nil, &os.PathError{"dir2Dir", path, nil}
+	}
+	sysif := d.Sys()
+	if sysif == nil {
+		return nil, &os.PathError{"dir2Dir: sysif is nil", path, nil}
+	}
+	sysMode := sysif.(*syscall.Win32FileAttributeData)
 
-	dir := new(Dir)
+	dir := new(ufsDir)
 	dir.Qid = *dir2Qid(d)
 	dir.Mode = dir2Npmode(d, dotu)
-	// dir.Atime = uint32(atime(sysMode).Unix())
+	// dir.Atime = uint32(0 /*atime(sysMode).Unix()*/)
 	// dir.Mtime = uint32(d.ModTime().Unix())
 	dir.Length = uint64(d.Size())
 	dir.Name = path[strings.LastIndex(path, "/")+1:]
 
 	if dotu {
-		// dir.dotu(path, d, upool, sysMode)
-		return &dir.Dir
+		dir.dotu(path, d, upool, sysMode)
+		return &dir.Dir, nil
 	}
 
 	// unixUid := int(sysMode.Uid)
@@ -101,10 +85,18 @@ func dir2Dir(path string, d os.FileInfo, dotu bool, upool p.Users) *p.Dir {
 	// 	dir.Gid = g.Username
 	// }
 
-	return &dir.Dir
+	var err error
+	/* For Akaros, we use the Muid as the link value. */
+	if *Akaros && (d.Mode()&os.ModeSymlink != 0) {
+		dir.Muid, err = os.Readlink(path)
+		if err == nil {
+			dir.Mode |= DMSYMLINK
+		}
+	}
+	return &dir.Dir, nil
 }
 
-func (dir *Dir) dotu(path string, d os.FileInfo, upool p.Users) {
+func (dir *ufsDir) dotu(path string, d os.FileInfo, upool Users, sysMode *syscall.Win32FileAttributeData) {
 	// u := upool.Uid2User(int(sysMode.Uid))
 	// g := upool.Gid2Group(int(sysMode.Gid))
 	// dir.Uid = u.Name()
@@ -120,7 +112,7 @@ func (dir *Dir) dotu(path string, d os.FileInfo, upool p.Users) {
 	// dir.Ext = ""
 	// dir.Uidnum = uint32(u.Id())
 	// dir.Gidnum = uint32(g.Id())
-	// dir.Muidnum = p.NOUID
+	// dir.Muidnum = NOUID
 	// if d.Mode()&os.ModeSymlink != 0 {
 	// 	var err error
 	// 	dir.Ext, err = os.Readlink(path)
@@ -137,12 +129,12 @@ func (dir *Dir) dotu(path string, d os.FileInfo, upool p.Users) {
 	dir.Muid = "none"
 	dir.Uidnum = 0
 	dir.Gidnum = 0
-	dir.Muidnum = p.NOUID
+	dir.Muidnum = NOUID
 	dir.Ext = ""
 }
 
-func (*Ufs) Wstat(req *srv.Req) {
-	fid := req.Fid.Aux.(*Fid)
+func (u *Ufs) Wstat(req *SrvReq) {
+	fid := req.Fid.Aux.(*ufsFid)
 	err := fid.stat()
 	if err != nil {
 		req.RespondError(err)
@@ -153,10 +145,10 @@ func (*Ufs) Wstat(req *srv.Req) {
 	if dir.Mode != 0xFFFFFFFF {
 		mode := dir.Mode & 0777
 		if req.Conn.Dotu {
-			if dir.Mode&p.DMSETUID > 0 {
+			if dir.Mode&DMSETUID > 0 {
 				mode |= syscall.S_ISUID
 			}
-			if dir.Mode&p.DMSETGID > 0 {
+			if dir.Mode&DMSETGID > 0 {
 				mode |= syscall.S_ISGID
 			}
 		}
@@ -167,7 +159,7 @@ func (*Ufs) Wstat(req *srv.Req) {
 		}
 	}
 
-	uid, gid := p.NOUID, p.NOUID
+	uid, gid := NOUID, NOUID
 	if req.Conn.Dotu {
 		uid = dir.Uidnum
 		gid = dir.Gidnum
@@ -191,7 +183,7 @@ func (*Ufs) Wstat(req *srv.Req) {
 		}
 	}
 
-	if uid != p.NOUID || gid != p.NOUID {
+	if uid != NOUID || gid != NOUID {
 		e := os.Chown(fid.path, int(uid), int(gid))
 		if e != nil {
 			req.RespondError(toError(e))
@@ -200,13 +192,25 @@ func (*Ufs) Wstat(req *srv.Req) {
 	}
 
 	if dir.Name != "" {
-		path := fid.path[0:strings.LastIndex(fid.path, "/")+1] + "/" + dir.Name
-		err := syscall.Rename(fid.path, path)
+		fmt.Printf("Rename %s to %s\n", fid.path, dir.Name)
+		// if first char is / it is relative to root, else relative to
+		// cwd.
+		var destpath string
+		if dir.Name[0] == '/' {
+			destpath = path.Join(u.Root, dir.Name)
+			fmt.Printf("/ results in %s\n", destpath)
+		} else {
+			fiddir, _ := path.Split(fid.path)
+			destpath = path.Join(fiddir, dir.Name)
+			fmt.Printf("rel  results in %s\n", destpath)
+		}
+		err := syscall.Rename(fid.path, destpath)
+		fmt.Printf("rename %s to %s gets %v\n", fid.path, destpath, err)
 		if err != nil {
 			req.RespondError(toError(err))
 			return
 		}
-		fid.path = path
+		fid.path = destpath
 	}
 
 	if dir.Length != 0xFFFFFFFFFFFFFFFF {
@@ -231,7 +235,7 @@ func (*Ufs) Wstat(req *srv.Req) {
 	// 		case true:
 	// 			mt = st.ModTime()
 	// 		default:
-	// 			at = atime(st.Sys().(os.FileInfo))
+	// 			//at = time.Time(0)//atime(st.Sys().(*syscall.Stat_t))
 	// 		}
 	// 	}
 	// 	e := os.Chtimes(fid.path, at, mt)

@@ -2,32 +2,27 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package ufs
 
 import (
-	"flag"
 	"fmt"
-	"github.com/rminnich/go9p"
 	"log"
+
+	"k8s.io/minikube/third_party/go9p"
 )
 
-var addr = flag.String("addr", ":5640", "network address")
-var debug = flag.Int("debug", 0, "print debug messages")
-var root = flag.String("root", "/", "root filesystem")
-
-func main() {
-	flag.Parse()
+func StartServer(addrVal string, debugVal int, rootVal string) {
 	ufs := new(go9p.Ufs)
 	ufs.Dotu = true
 	ufs.Id = "ufs"
-	ufs.Root = *root
-	ufs.Debuglevel = *debug
+	ufs.Root = rootVal
+	ufs.Debuglevel = debugVal
 	ufs.Start(ufs)
 
 	fmt.Print("ufs starting\n")
 	// determined by build tags
 	//extraFuncs()
-	err := ufs.StartNetListener("tcp", *addr)
+	err := ufs.StartNetListener("tcp", addrVal)
 	if err != nil {
 		log.Println(err)
 	}

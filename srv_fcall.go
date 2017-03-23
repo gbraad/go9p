@@ -4,6 +4,8 @@
 
 package go9p
 
+import "runtime"
+
 func (srv *Srv) version(req *SrvReq) {
 	tc := req.Tc
 	conn := req.Conn
@@ -62,9 +64,11 @@ func (srv *Srv) auth(req *SrvReq) {
 		user = srv.Upool.Uname2User(tc.Uname)
 	}
 
-	if user == nil {
-		req.RespondError(Enouser)
-		return
+	if runtime.GOOS != "windows" {
+		if user == nil {
+			req.RespondError(Enouser)
+			return
+		}
 	}
 
 	req.Afid.User = user
@@ -117,9 +121,11 @@ func (srv *Srv) attach(req *SrvReq) {
 		user = srv.Upool.Uname2User(tc.Uname)
 	}
 
-	if user == nil {
-		req.RespondError(Enouser)
-		return
+	if runtime.GOOS != "windows" {
+		if user == nil {
+			req.RespondError(Enouser)
+			return
+		}
 	}
 
 	req.Fid.User = user

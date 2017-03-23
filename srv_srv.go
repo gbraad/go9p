@@ -8,6 +8,7 @@ package go9p
 
 import (
 	"net"
+	"runtime"
 	"sync"
 )
 
@@ -281,6 +282,9 @@ func (req *SrvReq) Process() {
 		srv.version(req)
 
 	case Tauth:
+		if runtime.GOOS == "windows" {
+			return
+		}
 		srv.auth(req)
 
 	case Tattach:
