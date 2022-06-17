@@ -1,11 +1,19 @@
+go9p
+====
+
+Fork of the original rminnich/go9p repo with the patches of minikube
+
+
+
 This is go9p done in a way that I can understand.
 
 To install:
-  export GOPATH=~rminnich/go
-  go get -a /k8s.io/minikube/third_party/go9p
-  go get -a /k8s.io/minikube/third_party/go9p/ufs
-  go install -a /k8s.io/minikube/third_party/go9p/ufs
+
+```
+export GOPATH=~/go
+go get -a /github.com/gbraad/go9p
+go get -a /github.com/gbraad/go9p/ufs
+go install -a /github.com/gbraad/go9p/ufs       <!-- which won't work as main got renamed to StartServer for minikube
 
 ~/go/bin/ufs
-
-
+```

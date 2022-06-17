@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package ufs
+package cmd
 
 import (
 	"fmt"
 	"log"
 
-	"k8s.io/minikube/third_party/go9p"
+	"github.com/gbraad/go9p"
 )
 
 func StartServer(addrVal string, debugVal int, rootVal string) {
