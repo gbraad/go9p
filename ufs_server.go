@@ -2,17 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package cmd
+package go9p
 
 import (
 	"fmt"
 	"log"
-
-	"github.com/gbraad/go9p"
 )
 
 func StartServer(addrVal string, debugVal int, rootVal string) {
-	ufs := new(go9p.Ufs)
+	ufs := new(Ufs)
 	ufs.Dotu = true
 	ufs.Id = "ufs"
 	ufs.Root = rootVal
