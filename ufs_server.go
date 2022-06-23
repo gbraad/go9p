@@ -5,7 +5,6 @@
 package go9p
 
 import (
-	"fmt"
 	"log"
 )
 
@@ -17,7 +16,6 @@ func StartServer(addrVal string, debugVal int, rootVal string) {
 	ufs.Debuglevel = debugVal
 	ufs.Start(ufs)
 
-	fmt.Print("ufs starting\n")
 	// determined by build tags
 	// extraFuncs()
 	err := ufs.StartNetListener("tcp", addrVal)

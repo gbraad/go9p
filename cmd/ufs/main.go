@@ -5,16 +5,20 @@
 package main
 
 import (
+	"fmt"
 	"flag"
 
 	"github.com/gbraad/go9p"
 )
 
-var addr = flag.String("addr", ":5640", "network address")
-var debug = flag.Int("debug", 0, "print debug messages")
-var root = flag.String("root", "/", "root filesystem")
+var addr = flag.String("addr", ":5640", "Bind address")
+var path = flag.String("path", "/", "Path to share")
+var debug = flag.Int("debug", 0, "Print debug messages")
 
 func main() {
+	fmt.Print("go9P UFS server\n")
 	flag.Parse()
-	go9p.StartServer(*addr, *debug, *root)
+	fmt.Printf(" Bind address:\t%s\n", *addr)
+	fmt.Printf(" Shared path:\t%s\n", *path)
+	go9p.StartServer(*addr, *debug, *path)
 }
